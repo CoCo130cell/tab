@@ -1,0 +1,204 @@
+
+#include "stm32f10x.h"                  // Device header
+#include "Delay.h"
+#include "OLED.h"
+#include "Serial1.h"
+#include "Serial2.h"
+#include "Serial3.h"
+#include "dht11.h"
+#include "ESP8266.h"
+#include "Timer.h"
+#include "PWM.h"
+#include "Timer4.h"
+#include "hc.h"
+#include <string.h>
+u8 temp,humi,flag=0;
+u32 length1,length2,length3; //ÓÒ ÖÐ ×ó
+u16 i=100,j=10,k=0;
+int main(void)
+{
+	OLED_Init();
+	Serial1_Init();
+	Serial2_Init();
+	Serial3_Init();
+	ESP8266_Init();
+	DHT11_Init();
+	PWM_Init();
+	Hcsr04Init();
+	Timer4_Init();
+	OLED_ShowString(1,3,"C");
+	OLED_ShowString(2,3,"%");
+	OLED_ShowString(1,5,"R");
+	OLED_ShowString(2,5,"M");
+	OLED_ShowString(3,5,"L");
+	TIM_SetCompare1(TIM3,i);
+	TIM_SetCompare1(TIM2,75+j);
+	TIM_SetCompare2(TIM2,75-j);
+	while (1)
+	{	
+		length1 = Hcsr04GetLength1(); //²â¾à²¢ÏÔÊ¾
+		OLED_ShowNum(1,6,length1,3);
+		length2 = Hcsr04GetLength2(); 
+		OLED_ShowNum(2,6,length2,3);
+		length3 = Hcsr04GetLength3();
+		OLED_ShowNum(3,6,length3,3);
+		if(flag==1)
+		{
+			if((length1 > 20) && (length2 > 20) &&( length3 > 20))
+			{
+				Serial2_SendString("+1\r\n");
+			}
+			else if((length1 < 15)&&(length2 > 50))
+			{
+				Serial2_SendString("+3\r\n");
+				Delay_ms(200);
+			}
+			else if((length3 < 15)&&(length2 > 50))
+			{
+				Serial2_SendString("+4\r\n");
+				Delay_ms(200);
+			}
+			else if((length1 < 15)&&(length2 < 50))
+			{
+				Serial2_SendString("+7\r\n");
+				Delay_ms(200);
+			}
+			else if((length3 < 15)&&(length3 < 50))
+			{
+				Serial2_SendString("+8\r\n");
+				Delay_ms(200);
+			}
+			else if(length2 < 20)
+			{
+				Serial2_SendString("+2\r\n");
+				Delay_ms(450);
+				length1 = Hcsr04GetLength1();
+				length3 = Hcsr04GetLength3();
+				if(length1>length3) 
+				{
+					Serial2_SendString("+7\r\n");
+					Delay_ms(1000);
+				}
+				else if(length1<=length3)
+				{
+					Serial2_SendString("+8\r\n");
+					Delay_ms(1000);
+				}
+			}
+		}
+		if(Serial3_GteRxFlag() == 1)
+		{
+			OLED_ShowString(4,1,"                ");
+			OLED_ShowString(4,1,Serial3_RxPacket);
+			if(Serial3_RxPacket[8] == '0')    //Í£
+			{
+				flag=0;
+				Serial2_SendString("+0\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '1') //Ç°½ø
+			{	
+				flag=0;				
+				Serial2_SendString("+1\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '2') //ºóÍË
+			{
+				flag=0;
+				Serial2_SendString("+2\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '3') //×óÆ½ÒÆ
+			{
+				flag=0;
+				Serial2_SendString("+3\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '4') //ÓÒÆ½ÒÆ
+			{
+				flag=0;
+				Serial2_SendString("+4\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '6') //×ó×Ô×ª
+			{
+				flag=0;
+				Serial2_SendString("+6\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '5') //ÓÒ×Ô×ª
+			{
+				flag=0;
+				Serial2_SendString("+5\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '7') //×ó×ª
+			{
+				flag=0;
+				Serial2_SendString("+7\r\n");
+			}
+			else if(Serial3_RxPacket[8] == '8') //ÓÒ×ª
+			{
+				flag=0;
+				Serial2_SendString("+8\r\n");
+			}
+			else if(Serial3_RxPacket[8] == 'A')//ÖÇÄÜÄ£Ê½
+			{
+				flag=1;
+			}
+			else if(Serial3_RxPacket[8] == 'D')//±ßË¢¼õÐ¡
+			{
+				j -= 5;
+				TIM_SetCompare1(TIM2,75+j);
+				TIM_SetCompare2(TIM2,75-j);				
+			}
+			else if(Serial3_RxPacket[8] == 'E')//±ßË¢Ôö´ó
+			{
+				j += 5;
+				TIM_SetCompare1(TIM2,75+j);
+				TIM_SetCompare2(TIM2,75-j);				
+			}
+			else if(Serial3_RxPacket[8] == 'C')//ÎüÁ¦Ôö´ó
+			{
+							i += 100;
+				TIM_SetCompare1(TIM3,i);
+			}
+			else if(Serial3_RxPacket[8] == 'B')//ÎüÁ¦¼õÐ¡
+			{
+							i -= 100;
+				TIM_SetCompare1(TIM3,i);
+			}
+			else if(Serial3_RxPacket[8] == 'K')
+			{
+				Serial2_SendString("+K\r\n");			
+			}
+			else if(Serial3_RxPacket[8] == 'L')
+			{
+				Serial2_SendString("+L\r\n");				
+			}
+			else if(Serial3_RxPacket[8] == 'F')
+			{
+				Serial2_SendString("+F\r\n");				
+			}			
+		}	
+  } 
+}
+
+void TIM4_IRQHandler(void)
+{
+	if(TIM_GetITStatus(TIM4,TIM_IT_Update)==1)	
+	{   
+		DHT11_Read_Data(&temp,&humi);
+		OLED_ShowNum(1,1,temp,2);
+		OLED_ShowNum(2,1,humi,2);
+		k=(k+1)%2;
+		if(k == 1)
+		{
+			Serial3_SendString("AT+CIPSEND=0,3\r\n"); //·¢ËÍ¼ì²âµ½µÄÖµ
+			Delay_ms(7);
+			Serial3_SendNumber(humi+100,3);  //¼Ó100ÊÇÎªÁËÇø·ÖÊÇÎÂ¶È»¹ÊÇÊª¶È
+		}
+		else if(k == 0)
+		{
+			Serial3_SendString("AT+CIPSEND=0,3\r\n");
+			Delay_ms(7);
+			Serial3_SendNumber(temp,3);
+		}
+		
+	}
+	TIM_ClearITPendingBit(TIM4,TIM_IT_Update);
+}
+
